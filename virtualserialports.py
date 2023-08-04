@@ -85,5 +85,49 @@ def main():
         pass
 
 
+class VirtualSerial:
+    def __init__(self, num_ports, loopback=False, debug=False):
+        self.num_ports = num_ports
+        self.loopback = loopback
+        self.debug = debug
+        self.master_files = {}  # Dict of master fd to master file object.
+        self.slave_names = {}  # Dict of master fd to slave name.
+
+    def setup(self):
+        """Creates several serial ports. When data is received from one port, sends
+            to all the other ports."""
+
+        for _ in range(self.num_ports):
+            master_fd, slave_fd = pty.openpty()
+            tty.setraw(master_fd)
+            os.set_blocking(master_fd, False)
+            slave_name = os.ttyname(slave_fd)
+            self.master_files[master_fd] = open(master_fd, 'r+b', buffering=0)
+            self.slave_names[master_fd] = slave_name
+            print(slave_name)
+
+    def run(self):
+        with Selector() as selector, ExitStack() as stack:
+            # Context manage all the master file objects, and add to selector.
+            for fd, f in self.master_files.items():
+                stack.enter_context(f)
+                selector.register(fd, EVENT_READ)
+
+            while True:
+                for key, events in selector.select():
+                    if not events & EVENT_READ:
+                        continue
+
+                    data = self.master_files[key.fileobj].read()
+                    if self.debug:
+                        print(self.slave_names[key.fileobj], data, file=sys.stderr)
+
+                    # Write to master files. If loopback is False, don't write
+                    # to the sending file.
+                    for fd, f in self.master_files.items():
+                        if self.loopback or fd != key.fileobj:
+                            f.write(data)
+
+
 if __name__ == '__main__':
     main()

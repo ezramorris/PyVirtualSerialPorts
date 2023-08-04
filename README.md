@@ -92,6 +92,34 @@ Now typing data on one terminal will appear in the other.
     import virtualserialports
     virtualserialports.run(2, loopback=True, debug=False)
 
+### Usage within the same process
+
+    import json
+    import time
+    import serial
+    from multiprocessing import Process
+    from virtualserialports import VirtualSerial
+    
+    virtual_serial = VirtualSerial(num_ports=2, loopback=False, debug=False)
+    
+    ports_dict = virtual_serial.slave_names
+    keys = list(ports_dict.keys())
+    
+    port1 = virtual_serial.slave_names[keys[0]]
+    port2 = virtual_serial.slave_names[keys[1]]
+    
+    cli1 = serial.Serial(port1)
+    cli2 = serial.Serial(port2)
+    
+    virtual_serial = Process(target=virtual_serial.run)
+    virtual_serial.start()
+    
+    cli1.write(data=bytes(json.dumps(dict(hello="world")), "ascii"))
+    time.sleep(1)
+    print(f"received: {cli2.read_all()}")
+    
+    virtual_serial.terminate()
+
 
 [demo]: https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/demo.gif
 [com0com]: https://sourceforge.net/projects/com0com/
