@@ -3,7 +3,7 @@
 A Python implementation of virtual serial ports. Useful for developing and 
 testing programs which need to talk to a serial port.
 
-[![Demo](demo.gif)][demo]
+[![Demo](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/demo.gif)](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/demo.gif)
 
 Example uses:
 
@@ -93,6 +93,5 @@ Now typing data on one terminal will appear in the other.
     virtualserialports.run(2, loopback=True, debug=False)
 
 
-[demo]: https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/demo.gif
 [com0com]: https://sourceforge.net/projects/com0com/
 [Virtual Serial Port Driver]: https://www.virtual-serial-port.org/
