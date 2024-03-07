@@ -1,4 +1,4 @@
-# Copyright 2021, 2023 Ezra Morris
+# Copyright 2021, 2023-2024 Ezra Morris
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -57,6 +57,10 @@ class VirtualSerialPorts:
                 print(s2.read())
 
         """
+
+        if num_ports <= 0:
+            raise VirtualSerialPortException('number of ports must be greater '
+                                             'than 0')
 
         self.num_ports = num_ports
         self.loopback = loopback
