@@ -186,7 +186,13 @@ def run(num_ports, loopback=False, debug=False):
             selector.select()
 
 
-def main():
+def main(args_list=None):
+    """Main application execution.
+    
+    :param args_list: list of argument strings to interpret; None uses command 
+                      line args
+    """
+
     parser = argparse.ArgumentParser(
         description='Create a hub of virtual serial ports, which will stay '
         'available until the program is terminated. Once set up, the port names '
@@ -198,7 +204,7 @@ def main():
                         help='echo data back to the sending device too')
     parser.add_argument('-d', '--debug', action='store_true',
                         help='log received data to stderr')
-    args = parser.parse_args()
+    args = parser.parse_args(args_list)
 
     # Catch KeyboardInterrupt so it doesn't print traceback.
     try:
