@@ -8,9 +8,10 @@ on: [push]
 jobs:
   build:
 
-    runs-on: ubuntu-latest
     strategy:
       matrix:
+        os:
+          - ubuntu-20.04 # 20.04 supports all supported Python versions.
         python-version:
           - "3.5"
           - "3.6"
@@ -19,7 +20,9 @@ jobs:
           - "3.9"
           - "3.10"
           - "3.11"
-          - "3.12"          
+          - "3.12"
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
