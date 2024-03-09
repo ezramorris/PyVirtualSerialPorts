@@ -135,8 +135,8 @@ class BackgroundProcessingTestCase(unittest.TestCase):
             vsp.open()
             vsp.start()
             self.assertEqual(len(vsp.ports), 3)
-            with (open_port(vsp.ports[0]) as f0, open_port(vsp.ports[1]) as f1,
-                  open_port(vsp.ports[2]) as f2):
+            with open_port(vsp.ports[0]) as f0, open_port(vsp.ports[1]) as f1, \
+                 open_port(vsp.ports[2]) as f2:
                 reader1.start(f1)
                 reader2.start(f2)
                 f0.write(b'foo')
