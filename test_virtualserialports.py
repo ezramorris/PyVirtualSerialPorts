@@ -5,6 +5,7 @@ from selectors import DefaultSelector, EVENT_READ
 import signal
 import subprocess
 import sys
+from threading import Timer
 import tty
 import unittest
 
@@ -162,94 +163,115 @@ class ContextManagerTestCase(unittest.TestCase):
             vsp.ports
 
 
-class CLITestCase(unittest.TestCase):
-    def _create_vsp_proc(self, args):
-        """Create Popen object for running virtualserialports CLI.
-        
-        :param args: list of arguments to pass to CLI
-        :return: Popen object
+class VSPCLI:
+    """Class for running and interacting with the virtualserialports CLI."""
+
+    def __init__(self, args, interrupt_after=5):
+        """:param args: list of arguments to pass to CLI
+        :param interrupt_after: seconds to interrupt the program after; acts
+                                as a safety net in case reads block etc.
         """
 
-        proc = subprocess.Popen(
-            [sys.executable, virtualserialports.__file__] + args,
+        self.args = args
+        self.interrupt_after = interrupt_after
+        self._proc: subprocess.Popen = None
+        self._timer: Timer = None
+
+    def __enter__(self):
+        """Entering context manager; start process."""
+
+        self.start()
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Exiting context manager, ensure process is properly terminated."""
+
+        self.shutdown()
+
+    def _cancel_timer(self):
+        """Cancel any pending interrupt timer."""
+
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+
+    def start(self):
+        """Start the virtualserialports process."""
+
+        if self._proc is not None:
+            raise Exception('process is already running; call shutdown() first')
+        
+        self._proc = subprocess.Popen(
+            # Need -u to force Python not to buffer output - else can't read
+            # the ports in timely manner.
+            [sys.executable, virtualserialports.__file__] + self.args,
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE, text=True
         )
-        return proc
+        self._timer = Timer(self.interrupt_after, self.interrupt)
+        self._timer.start()
 
-    def _run_vsp(self, args, timeout=0.1):
-        """Run virutalserialports CLI.
-        
-        :param args: list of arguments to pass to CLI
-        :param timeout: how long to let it run
+    def interrupt(self):
+        """Send interrupt signal to the process."""
 
-        :return: tuple of (statuscode, stdout, stderr); statuscode is None if
-                 timeout occurred
+        self._proc.send_signal(signal.SIGINT)
+        self._cancel_timer()
+
+    def wait_and_get_result(self):
+        """Waits for program to exit, and returns tuple of 
+        (statuscode, stdout, stderr).
+
+        To ensure the program does indeed exit, run interrupt_after() first.
         """
 
-        proc = self._create_vsp_proc(args)
-        try:
-            stdout, stderr = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            stdout, stderr = self._terminate_proc(proc)
-        return proc.returncode, stdout, stderr
+        stdout, stderr = self._proc.communicate()
+        return self._proc.returncode, stdout, stderr
     
-    def _terminate_proc(self, proc: subprocess.Popen, timeout=1):
-        """Terminate a process, and return output. If timeout exceeded, will
-        forcefully kill it.
-        
-        :param proc: Popen object
-        :param timeout: time to wait after terminating before killing
-
-        :return: tuple of (stdout, stderr)
+    def stdout_readline(self):
+        """Read a line from stdout. To ensure this doesn't block indefinitely,
+        run interrupt_after() first.
         """
 
-        proc.terminate()
-        try:
-            res = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            res = proc.communicate()
-
-        return res
+        return self._proc.stdout.readline()
     
-    def setUp(self):
-        # There is a risk some of these tests can hang if the process hangs.
-        # So this provides a 5s timeout for all tests.
+    def shutdown(self):
+        """Terminate process. If not dead within 1 second, force kills it."""
 
-        def _alarm_handler(signum, frame):
-            raise TestTimeout('test took over 5s to run so was aborted')
-        
-        signal.signal(signal.SIGALRM, _alarm_handler)
-        signal.alarm(5)
+        self._proc.terminate()
+        self._cancel_timer()
+        try:
+            self._proc.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
+            self._proc.communicate()
+        self._proc = None
 
-    def tearDown(self):
-        # Clear down alarm signal handling.
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, signal.SIG_DFL)
-
-        
+class CLITestCase(unittest.TestCase):
     def test_help(self):
-        code, stdout, stderr = self._run_vsp(['--help'])
+        with VSPCLI(['--help']) as cli:
+            code, stdout, stderr = cli.wait_and_get_result()
         self.assertIn('usage:', stdout)
 
     def test_no_ports_specified(self):
-        code, stdout, stderr = self._run_vsp([])
+        with VSPCLI([], interrupt_after=0.1) as cli:
+            code, stdout, stderr = cli.wait_and_get_result()
         self.assertGreater(code, 0)
 
     def test_ports_written_to_stdout(self):
-        code, stdout, stderr = self._run_vsp(['2'])
-        port_paths = stdout.strip().splitlines()
+        with VSPCLI(['2'], interrupt_after=0.1) as cli:
+            port_paths = [cli.stdout_readline().strip() for _ in range(2)]
+            cli.interrupt()
         self.assertEqual(len(port_paths), 2)
         for path in port_paths:
             self.assertRegex(path, r'^/dev/pts/[0-9]+$')
 
     def test_2_port_communication(self):
-        proc = self._create_vsp_proc(['2'])
+        with VSPCLI(['2'], interrupt_after=1) as cli:
+            port1_path = cli.stdout_readline().strip()
+            port2_path = cli.stdout_readline().strip()
 
-        try:
-            port1_path = proc.stdout.readline().strip()
-            port2_path = proc.stdout.readline().strip()
+            print(port1_path, port2_path)
+
             reader1 = BackgroundReader()
             reader2 = BackgroundReader()
 
@@ -263,18 +285,17 @@ class CLITestCase(unittest.TestCase):
 
             self.assertEqual(out1, b'hello2')
             self.assertEqual(out2, b'hello1')
-        finally:
-            self._terminate_proc(proc)
+
+            cli.interrupt()
 
 
     def test_debug(self):
-        proc = self._create_vsp_proc(['-l', '-d', '1'])
-        try:
-            port_path = proc.stdout.readline().strip()
+        with VSPCLI(['-l', '-d', '1'], interrupt_after=1) as cli:
+            port_path = cli.stdout_readline().strip()
             with open_port(port_path) as f:
                 f.write(b'hello')
-            debug_text = proc.stderr.readline().strip()
-        finally:
-            self._terminate_proc(proc)
+            cli.interrupt()
+            code, stdout, stderr = cli.wait_and_get_result()
+            debug_text = stderr.strip()
 
         self.assertRegex(debug_text, r"^/dev/pts/[0-9]+ b'hello'$")
