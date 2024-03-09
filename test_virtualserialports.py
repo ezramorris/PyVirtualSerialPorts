@@ -1,12 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor
 import io
-from multiprocessing import Process
 import os
 from selectors import DefaultSelector, EVENT_READ
-from time import sleep
+import signal
+import subprocess
+import sys
 import tty
 import unittest
-from unittest.mock import Mock, patch
 
 import virtualserialports
 from virtualserialports import VirtualSerialPorts, VirtualSerialPortException
@@ -34,6 +34,10 @@ def read_with_timeout(f, timeout=1):
 
     # If we get here, no data was read after the timeout.
     return None
+
+
+class TestTimeout(Exception):
+    """Exception raised if a test times out."""
 
 
 class BackgroundReader:
@@ -158,19 +162,119 @@ class ContextManagerTestCase(unittest.TestCase):
             vsp.ports
 
 
-class MainTestCase(unittest.TestCase):
-    def test_no_ports_specified(self):
-        with self.assertRaises(SystemExit):
-            virtualserialports.main([])
+class CLITestCase(unittest.TestCase):
+    def _create_vsp_proc(self, args):
+        """Create Popen object for running virtualserialports CLI.
+        
+        :param args: list of arguments to pass to CLI
+        :return: Popen object
+        """
 
-    # TODO: fix tests
-    # def test_1_port_loopback(self):
-    #     with patch('sys.stdout', new_callable=io.StringIO) as stdout_mock:
-    #         p = Process(target=virtualserialports.main, args=(['-l', '1'],))
-    #         try:
-    #             p.start()
-    #             sleep(1)
-    #             self.assertEqual(stdout_mock.getvalue(), 'foo')
-    #         finally:
-    #             p.terminate()
-    #             p.join(1)
+        proc = subprocess.Popen(
+            [sys.executable, virtualserialports.__file__] + args,
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, text=True
+        )
+        return proc
+
+    def _run_vsp(self, args, timeout=0.1):
+        """Run virutalserialports CLI.
+        
+        :param args: list of arguments to pass to CLI
+        :param timeout: how long to let it run
+
+        :return: tuple of (statuscode, stdout, stderr); statuscode is None if
+                 timeout occurred
+        """
+
+        proc = self._create_vsp_proc(args)
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            stdout, stderr = self._terminate_proc(proc)
+        return proc.returncode, stdout, stderr
+    
+    def _terminate_proc(self, proc: subprocess.Popen, timeout=1):
+        """Terminate a process, and return output. If timeout exceeded, will
+        forcefully kill it.
+        
+        :param proc: Popen object
+        :param timeout: time to wait after terminating before killing
+
+        :return: tuple of (stdout, stderr)
+        """
+
+        proc.terminate()
+        try:
+            res = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            res = proc.communicate()
+
+        return res
+    
+    def setUp(self):
+        # There is a risk some of these tests can hang if the process hangs.
+        # So this provides a 5s timeout for all tests.
+
+        def _alarm_handler(signum, frame):
+            raise TestTimeout('test took over 5s to run so was aborted')
+        
+        signal.signal(signal.SIGALRM, _alarm_handler)
+        signal.alarm(5)
+
+    def tearDown(self):
+        # Clear down alarm signal handling.
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
+
+        
+    def test_help(self):
+        code, stdout, stderr = self._run_vsp(['--help'])
+        self.assertIn('usage:', stdout)
+
+    def test_no_ports_specified(self):
+        code, stdout, stderr = self._run_vsp([])
+        self.assertGreater(code, 0)
+
+    def test_ports_written_to_stdout(self):
+        code, stdout, stderr = self._run_vsp(['2'])
+        port_paths = stdout.strip().splitlines()
+        self.assertEquals(len(port_paths), 2)
+        for path in port_paths:
+            self.assertRegex(path, r'^/dev/pts/[0-9]+$')
+
+    def test_2_port_communication(self):
+        proc = self._create_vsp_proc(['2'])
+
+        try:
+            port1_path = proc.stdout.readline().strip()
+            port2_path = proc.stdout.readline().strip()
+            reader1 = BackgroundReader()
+            reader2 = BackgroundReader()
+
+            with open_port(port1_path) as f1, open_port(port2_path) as f2:
+                reader1.start(f1)
+                reader2.start(f2)
+                f1.write(b'hello1')
+                f2.write(b'hello2')
+                out1 = reader1.wait_result()
+                out2 = reader2.wait_result()
+
+            self.assertEqual(out1, b'hello2')
+            self.assertEqual(out2, b'hello1')
+        finally:
+            self._terminate_proc(proc)
+
+
+    def test_debug(self):
+        proc = self._create_vsp_proc(['-l', '-d', '1'])
+        try:
+            port_path = proc.stdout.readline().strip()
+            with open_port(port_path) as f:
+                f.write(b'hello')
+            debug_text = proc.stderr.readline().strip()
+        finally:
+            self._terminate_proc(proc)
+
+        self.assertRegex(debug_text, r"^/dev/pts/[0-9]+ b'hello'$")
