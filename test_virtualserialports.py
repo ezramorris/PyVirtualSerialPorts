@@ -240,7 +240,7 @@ class CLITestCase(unittest.TestCase):
     def test_ports_written_to_stdout(self):
         code, stdout, stderr = self._run_vsp(['2'])
         port_paths = stdout.strip().splitlines()
-        self.assertEquals(len(port_paths), 2)
+        self.assertEqual(len(port_paths), 2)
         for path in port_paths:
             self.assertRegex(path, r'^/dev/pts/[0-9]+$')
 
