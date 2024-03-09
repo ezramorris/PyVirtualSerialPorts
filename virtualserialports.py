@@ -180,6 +180,10 @@ def run(num_ports, loopback=False, debug=False):
     with VirtualSerialPorts(num_ports, loopback, debug) as ports:
         print(*ports, sep='\n')
 
+        # Flush stdout, in case the ports are being read in a pipe. Else
+        # Python will buffer it and block.
+        sys.stdout.flush()
+
         # Do nothing until killed.
         # Thread cleanup is handled by the context manager.
         with Selector() as selector:
