@@ -203,8 +203,8 @@ class VSPCLI:
         
         self._proc = subprocess.Popen(
             # Need -u to force Python not to buffer output - else can't read
-            # the ports in timely manner.
-            [sys.executable, virtualserialports.__file__] + self.args,
+            # output in timely manner (e.g. debug data).
+            [sys.executable, '-u', virtualserialports.__file__] + self.args,
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE, universal_newlines=True
         )
@@ -233,6 +233,13 @@ class VSPCLI:
         """
 
         return self._proc.stdout.readline()
+    
+    def stderr_readline(self):
+        """Read a line from stderr. To ensure this doesn't block indefinitely,
+        run interrupt_after() first.
+        """
+
+        return self._proc.stderr.readline()
     
     def shutdown(self):
         """Terminate process. If not dead within 1 second, force kills it."""
@@ -302,8 +309,7 @@ class CLITestCase(unittest.TestCase):
             port_path = cli.stdout_readline().strip()
             with open_port(port_path) as f:
                 f.write(b'hello')
+            debug_text = cli.stderr_readline().strip()
             cli.interrupt()
-            code, stdout, stderr = cli.wait_and_get_result()
-            debug_text = stderr.strip()
 
         self.assertRegex(debug_text, r"^/dev/[a-z/]+[0-9]+ b'hello'$")
