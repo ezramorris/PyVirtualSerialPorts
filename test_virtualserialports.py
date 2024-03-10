@@ -237,13 +237,23 @@ class VSPCLI:
     def shutdown(self):
         """Terminate process. If not dead within 1 second, force kills it."""
 
+        def communicate_or_wait(timeout=None):
+            # Workaround for https://bugs.python.org/issue35182
+            # For Python versions <3.7, communicate() raises ValueError if
+            # streams are already closed, but if just wait() is run, then 
+            # streams may be left open, and a warning is issued.
+            try:
+                self._proc.communicate(timeout=1)
+            except ValueError:
+                self._proc.wait(timeout=1)
+
         self._proc.terminate()
         self._cancel_timer()
         try:
-            self._proc.communicate(timeout=1)
+            communicate_or_wait(timeout=1)
         except subprocess.TimeoutExpired:
             self._proc.kill()
-            self._proc.communicate()
+            communicate_or_wait()
         self._proc = None
 
 class CLITestCase(unittest.TestCase):
@@ -269,8 +279,6 @@ class CLITestCase(unittest.TestCase):
         with VSPCLI(['2'], interrupt_after=1) as cli:
             port1_path = cli.stdout_readline().strip()
             port2_path = cli.stdout_readline().strip()
-
-            print(port1_path, port2_path)
 
             reader1 = BackgroundReader()
             reader2 = BackgroundReader()
