@@ -174,8 +174,8 @@ class VSPCLI:
 
         self.args = args
         self.interrupt_after = interrupt_after
-        self._proc: subprocess.Popen = None
-        self._timer: Timer = None
+        self._proc = None  # type: subprocess.Popen
+        self._timer = None  # type: Timer
 
     def __enter__(self):
         """Entering context manager; start process."""
