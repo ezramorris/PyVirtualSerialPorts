@@ -273,7 +273,7 @@ class CLITestCase(unittest.TestCase):
             cli.interrupt()
         self.assertEqual(len(port_paths), 2)
         for path in port_paths:
-            self.assertRegex(path, r'^/dev/pts/[0-9]+$')
+            self.assertRegex(path, r'^/dev/[a-z/]+[0-9]+$')
 
     def test_2_port_communication(self):
         with VSPCLI(['2'], interrupt_after=1) as cli:
@@ -306,4 +306,4 @@ class CLITestCase(unittest.TestCase):
             code, stdout, stderr = cli.wait_and_get_result()
             debug_text = stderr.strip()
 
-        self.assertRegex(debug_text, r"^/dev/pts/[0-9]+ b'hello'$")
+        self.assertRegex(debug_text, r"^/dev/[a-z/]+[0-9]+ b'hello'$")
