@@ -1,12 +1,12 @@
 # Run unit tests on push.
 # Loosely based on https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#using-multiple-python-versions
 
-name: Python test
+name: Python build
 
 on: [push]
 
 jobs:
-  build:
+  test:
 
     strategy:
       matrix:
