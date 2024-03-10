@@ -135,6 +135,7 @@ class VirtualSerialPorts:
                     if self.debug:
                         print(self._slave_names[key.fileobj], data,
                               file=sys.stderr)
+                        sys.stderr.flush()
 
                     # Write to master files. If loopback is False, don't write
                     # to the sending file.
