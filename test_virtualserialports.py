@@ -206,7 +206,7 @@ class VSPCLI:
             # the ports in timely manner.
             [sys.executable, virtualserialports.__file__] + self.args,
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE, text=True
+            stderr=subprocess.PIPE, universal_newlines=True
         )
         self._timer = Timer(self.interrupt_after, self.interrupt)
         self._timer.start()
