@@ -12,6 +12,7 @@ jobs:
       matrix:
         os:
           - ubuntu-20.04 # 20.04 supports all supported Python versions.
+          - macos-latest
         python-version:
           - "3.5"
           - "3.6"
