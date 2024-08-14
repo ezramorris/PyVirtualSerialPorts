@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
 import argparse
 import os
 import pty
@@ -31,7 +32,8 @@ class VirtualSerialPortException(Exception):
     """Exceptions raised from this module."""
 
 
-not_opened = VirtualSerialPortException('ports are not yet opened')
+class NotOpenedException(VirtualSerialPortException):
+    """Raised when trying to use the port before it is opened."""
 
 
 class VirtualSerialPorts:
@@ -42,7 +44,7 @@ class VirtualSerialPorts:
         :param loopback: whether to echo data back to the sender
         :param debug: whether to print debugging info to stdout
 
-        Can be used as a context manager which will create the ports, start the 
+        Can be used as a context manager which will create the ports, start the
         processing, and return the ports on entry; and close and remove the
         ports on exit. For example, using PySerial:
 
@@ -117,7 +119,7 @@ class VirtualSerialPorts:
         """
 
         if self._master_files is None or self._slave_names is None:
-            raise not_opened
+            raise NotOpenedException("No ports available.")
 
         self.running = True
 
@@ -165,12 +167,118 @@ class VirtualSerialPorts:
         """List of the created ports."""
 
         if self._slave_names is None:
-            raise not_opened
+            raise NotOpenedException("No ports available.")
         return list(self._slave_names.values())
 
 
+
+class AsyncVirtualSerialPort:
+    def __init__(self, loopback: bool=False, debug: bool=False):
+        """Class for managing a virtual serial port.
+
+        Can be used as a context manager which will create the port, start the
+        processing, and return the port on entry; and close and remove the
+        port on exit. For example, using PySerial:
+
+        from serial import Serial
+        from virtualserialports import AsyncVirtualSerialPort
+
+        with VirtualSerialPort() as port:
+            print(port)
+            with Serial(port) as s:
+                s.write(b'hello')
+                print(s.read())
+        """
+
+        self.loopback = loopback
+        self.debug = debug
+        self.running = False
+
+        self._thread = None
+        self._main_fd = None
+        self._main_file = None
+        self.ttyname = None
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def open(self):
+        """Configure and open the ports."""
+
+        self.close()
+        self._main_fd, node_fd = pty.openpty()
+
+        # Set raw (pass through control characters) and blocking mode on the
+        # master. Nodes expected to be configured by the client.
+        tty.setraw(self._main_fd)
+        os.set_blocking(self._main_fd, False)
+
+        # Open the main file descriptor, and store the file object in the
+        # dict.
+        self._main_file = open(self._main_fd, 'r+b', buffering=0)
+
+        # Get the os-visible name (e.g. /dev/pts/1) and store in dict.
+        self.ttyname = os.ttyname(node_fd)
+
+    def close(self):
+        """Close ports."""
+        self.running = False
+
+        if self._main_file is not None:
+            self._main_file.close()
+
+        self._main_fd = None
+        self._main_file = None
+        self.ttyname = None
+
+    @classmethod
+    async def run(cls, debug: bool=False, loopback: bool=False):
+        """Forward data, until self.running is set to False or the process is
+        terminated.
+        """
+
+        with cls(debug=debug, loopback=loopback) as port, Selector() as selector:
+
+            if port._main_file is None or port._main_fd is None:
+                raise NotOpenedException("No port available.")
+
+            # Flush stdout, in case the ports are being read in a pipe. Else
+            # Python will buffer it and block.
+            sys.stdout.flush()
+
+            selector.register(port._main_fd, EVENT_READ)
+
+            port.running = True
+            while port.running:
+                await asyncio.sleep(0)
+
+                for key, events in selector.select(timeout=0):
+
+                    if not events & EVENT_READ:
+                        continue
+
+                    data = port._main_file.read()
+
+                    if port.debug:
+                        print(port.ttyname, data, file=sys.stderr)
+                        sys.stderr.flush()
+
+                    # Write to master files. If loopback is False, don't write
+                    # to the sending file.
+                    if port.loopback:
+                        port._main_file.write(data)
+
+    async def stop(self):
+        """Stop the background thread if running."""
+        self.running = False
+
+
 def run(num_ports, loopback=False, debug=False):
-    """Creates several virtual serial ports and prints the port names. When 
+    """Creates several virtual serial ports and prints the port names. When
     data is received from one port, sends to all the other ports.
 
     :param num_ports: number of ports to create
@@ -193,8 +301,8 @@ def run(num_ports, loopback=False, debug=False):
 
 def main(args_list=None):
     """Main application execution.
-    
-    :param args_list: list of argument strings to interpret; None uses command 
+
+    :param args_list: list of argument strings to interpret; None uses command
                       line args
     """
 
