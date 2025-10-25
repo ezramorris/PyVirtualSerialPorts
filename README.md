@@ -3,28 +3,32 @@
 A Python implementation of virtual serial ports. Useful for developing and 
 testing programs which need to talk to a serial port.
 
-[![Demo](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/demo.gif)](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/demo.gif)
+You can:
 
-Example uses:
+* Create a virtual port which echoes back any data sent to it:
+  [![Demo showing characters being entered into a terminal emulator being echoed back](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/images/demo_1_loopback.gif?raw=true)](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/images/demo_1_loopback.gif?raw=true)
 
-* Create a virtual port which echoes back any data sent to it.
-* Create a two or more ports; sending data to one sends data to the others.
+* Create a two or more ports; sending data to one sends data to the others:
+  [![Demo showing characters being sent alternately into two terminal emulators, with the characters appearing on the opposite terminal.](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/images/demo_2.gif?raw=true)](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/images/demo_2.gif?raw=true)
 
-Should work on Python 3.5+, however is only tested on supported
+* Monitor what is being sent between the ports:
+  [![Demo showing characters being sent alternately in two terminal emulators, with the characters appearing on both terminals, and debug data showing in the pyvirtualserialports output.](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/images/demo_2_loopback_debug.gif?raw=true)](https://github.com/ezramorris/PyVirtualSerialPorts/blob/main/images/demo_2_loopback_debug.gif?raw=true)
+
+It should work on Python 3.5+, however is only tested on supported
 [Python versions].
 
 Has no dependencies other than the Python standard library.
 
 Currently works on *nix type systems. Tested on Ubuntu and MacOS, but should 
-work on others (BSD, etc.). Windows support is being worked on.
+work on others e.g. BSD. Windows support is being worked on.
 
 ## Installation
 
-### Current user
+### Install for current user
 
     $ pip3 install PyVirtualSerialPorts
 
-### System-wide
+### Install system-wide
 
     $ sudo pip3 install PyVirtualSerialPorts
 
@@ -99,7 +103,7 @@ with VirtualSerialPorts(2) as ports:
 ```
 
 `ports` is a list of strings, which can be used to open the ports, e.g with
-PySerial. A complete example is in example.py.
+PySerial. A complete example is in [example.py](example.py).
 
 It can also be used without a context manager as follows:
 
