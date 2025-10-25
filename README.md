@@ -10,10 +10,13 @@ Example uses:
 * Create a virtual port which echoes back any data sent to it.
 * Create a two or more ports; sending data to one sends data to the others.
 
+Should work on Python 3.5+, however is only tested on supported
+[Python versions].
+
 Has no dependencies other than the Python standard library.
 
-Only works on *nix type systems. Tested on Debian Linux, but should work on
-others (macOS, BSD, etc.). Windows support is being worked on.
+Currently works on *nix type systems. Tested on Ubuntu and MacOS, but should 
+work on others (BSD, etc.). Windows support is being worked on.
 
 ## Installation
 
@@ -110,3 +113,6 @@ vsp.start()
 vsp.stop()
 vsp.close()
 ```
+
+
+[Python versions]: https://devguide.python.org/versions/

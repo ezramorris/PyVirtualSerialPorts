@@ -12,14 +12,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-20.04 # 20.04 supports all supported Python versions.
-          - macos-latest
+          - ubuntu-24.04
+          - macos-15-intel # Use Intel macOS to support older Python versions.
         python-version:
-          - "3.5"
-          - "3.6"
-          - "3.7"
-          - "3.8"
-          - "3.9"
           - "3.10"
           - "3.11"
           - "3.12"
