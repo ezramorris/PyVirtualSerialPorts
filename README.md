@@ -13,8 +13,7 @@ Example uses:
 Has no dependencies other than the Python standard library.
 
 Only works on *nix type systems. Tested on Debian Linux, but should work on
-others (macOS, BSD, etc.). For Windows, look at [com0com] or 
-[Virtual Serial Port Driver].
+others (macOS, BSD, etc.). Windows support is being worked on.
 
 ## Installation
 
@@ -81,17 +80,33 @@ Now typing data on one terminal will appear in the other.
 
 ## Use as a library
 
-`virtualserialports.run(num_ports, loopback=False, debug=False)`
+As of version 2.0.0, much improved support has been added for use as a library,
+with processing done in the background.
 
-* *num_ports*: number of ports to create.
-* *loopback*: whether to echo data back to the sender.
-* *debug*: whether to print debugging info to stdout.
+It is recommended to use as a context manager, which will handle setup and
+clean up nicely:
 
-### Example
+```python
+with VirtualSerialPorts(2) as ports:
+    print(f'Port 1: {ports[0]}')
+    print(f'Port 2: {ports[1]}')
 
-    import virtualserialports
-    virtualserialports.run(2, loopback=True, debug=False)
+    # Open and use ports as required.
+    # When the context manager ends, ports will be removed.
+```
 
+`ports` is a list of strings, which can be used to open the ports, e.g with
+PySerial. A complete example is in example.py.
 
-[com0com]: https://sourceforge.net/projects/com0com/
-[Virtual Serial Port Driver]: https://www.virtual-serial-port.org/
+It can also be used without a context manager as follows:
+
+```python
+vsp = VirtualSerialPorts(2)
+vsp.open()
+# `vsp.ports` is a list of strings of the created ports.
+
+vsp.start()
+# Use ports as you wish here.
+vsp.stop()
+vsp.close()
+```
